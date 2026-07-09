@@ -1,11 +1,17 @@
+import os
 from flask import Flask
 from flask_sqlalchemy import SQLAlchemy
 from flask_login import LoginManager
 from flask_wtf import CSRFProtect
+from flask_migrate import Migrate
+from dotenv import load_dotenv
+
+load_dotenv()
 
 db = SQLAlchemy()
 login_manager = LoginManager()
 csrf = CSRFProtect()
+migrate = Migrate()
 
 
 def create_app(config_object: str = 'app.config.Config'):
@@ -15,6 +21,7 @@ def create_app(config_object: str = 'app.config.Config'):
     db.init_app(app)
     login_manager.init_app(app)
     csrf.init_app(app)
+    migrate.init_app(app, db)
 
     # Register blueprints (minimal skeletons)
     from app.auth.routes import auth_bp
