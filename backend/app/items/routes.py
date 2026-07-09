@@ -71,14 +71,28 @@ def get_item(item_id):
     return jsonify({'id': it.id, 'title': it.title, 'description': it.description, 'price': float(it.price), 'images': imgs, 'owner': {'id': owner.id, 'username': owner.username}, 'status': it.status})
 
 
+@items_bp.route('/mine', methods=['GET'])
+@login_required
+def my_items():
+    items = Item.query.filter_by(owner_id=current_user.id).order_by(Item.created_at.desc()).all()
+    out = []
+    for it in items:
+        out.append({'id': it.id, 'title': it.title, 'price': float(it.price), 'status': it.status})
+    return jsonify({'items': out})
+
+
 @items_bp.route('/<int:item_id>/request', methods=['POST'])
 @login_required
 def request_purchase(item_id):
     it = Item.query.get_or_404(item_id)
     if it.owner_id == current_user.id:
         return jsonify({'error': 'validation', 'message': 'cannot request own item'}), 400
-    # create transaction
+
     from app.models import Transaction
+    existing = Transaction.query.filter_by(item_id=it.id, buyer_id=current_user.id, seller_id=it.owner_id).order_by(Transaction.created_at.desc()).first()
+    if existing:
+        return jsonify({'transaction_id': existing.id, 'status': existing.status, 'message': 'existing request'}), 200
+
     tx = Transaction(item_id=it.id, buyer_id=current_user.id, seller_id=it.owner_id)
     db.session.add(tx)
     db.session.commit()

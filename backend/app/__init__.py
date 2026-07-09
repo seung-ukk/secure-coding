@@ -23,6 +23,9 @@ def create_app(config_object: str = 'app.config.Config'):
     csrf.init_app(app)
     migrate.init_app(app, db)
 
+    # Import models before creating tables so the metadata is registered.
+    from app import models  # noqa: F401
+
     # Register blueprints (minimal skeletons)
     from app.auth.routes import auth_bp
     from app.items.routes import items_bp
@@ -30,6 +33,9 @@ def create_app(config_object: str = 'app.config.Config'):
     from app.reports.routes import reports_bp
     from app.admin.routes import admin_bp
     from app.payments.routes import payments_bp
+
+    with app.app_context():
+        db.create_all()
 
     app.register_blueprint(auth_bp, url_prefix='/api/auth')
     app.register_blueprint(items_bp, url_prefix='/api/items')
@@ -62,5 +68,9 @@ def create_app(config_object: str = 'app.config.Config'):
     @app.route('/items/<int:item_id>')
     def item_detail_page(item_id):
         return app.send_static_file('item_detail.html')
+
+    @app.route('/dashboard')
+    def dashboard_page():
+        return app.send_static_file('dashboard.html')
 
     return app

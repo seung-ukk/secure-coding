@@ -1,0 +1,56 @@
+<!doctype html>
+<html lang="ko">
+<head>
+  <meta charset="utf-8">
+  <title>내 대시보드</title>
+  <style>body{font-family:Arial,sans-serif;max-width:900px;margin:2rem auto;padding:1rem} .card{border:1px solid #ddd;padding:1rem;margin:1rem 0;border-radius:6px}</style>
+</head>
+<body>
+  <h2>내 대시보드</h2>
+  <p>로그인한 사용자의 상품과 거래 요청을 확인할 수 있습니다.</p>
+  <div id="status">불러오는 중...</div>
+  <h3>내 판매글</h3>
+  <div id="my-items"></div>
+  <h3>내 거래 요청</h3>
+  <div id="my-transactions"></div>
+  <p><a href="/">홈으로</a></p>
+  <script>
+    async function loadDashboard() {
+      const statusEl = document.getElementById('status');
+      const itemsEl = document.getElementById('my-items');
+      const txEl = document.getElementById('my-transactions');
+
+      const authRes = await fetch('/api/auth/status', { credentials: 'same-origin' });
+      const authData = await authRes.json().catch(() => ({}));
+      if (!authData.authenticated) {
+        statusEl.innerHTML = '로그인이 필요합니다.';
+        return;
+      }
+
+      statusEl.innerHTML = `안녕하세요, <strong>${authData.user?.username || '사용자'}</strong>님!`;
+
+      const itemsRes = await fetch('/api/items/mine', { credentials: 'same-origin' });
+      const itemsData = await itemsRes.json().catch(() => ({ items: [] }));
+      itemsEl.innerHTML = (itemsData.items || []).length
+        ? itemsData.items.map(item => `<div class="card">${item.title} - ${item.price.toLocaleString()}원 (상태: ${item.status})</div>`).join('')
+        : '<p>등록한 판매글이 없습니다.</p>';
+
+      const txRes = await fetch('/api/transactions/mine', { credentials: 'same-origin' });
+      const txData = await txRes.json().catch(() => ({ transactions: [] }));
+      txEl.innerHTML = (txData.transactions || []).length
+        ? txData.transactions.map(tx => `
+          <div class="card">
+            <strong>거래 #${tx.id}</strong><br>
+            상품 ID: ${tx.item_id} / 상태: ${tx.status}<br>
+            <div style="margin-top:0.5rem">
+              ${((tx.messages || []).length ? tx.messages.map(msg => `<div>• ${msg.content}</div>`).join('') : '<div>메시지가 없습니다.</div>')}
+            </div>
+          </div>
+        `).join('')
+        : '<p>진행 중인 거래가 없습니다.</p>';
+    }
+
+    loadDashboard();
+  </script>
+</body>
+</html>

@@ -5,10 +5,16 @@ from app.models import Report, Item, User
 from flask_login import login_required, current_user
 
 
+def _get_request_data():
+    if request.is_json:
+        return request.get_json(silent=True) or {}
+    return request.form.to_dict()
+
+
 @reports_bp.route('', methods=['POST'])
 @login_required
 def create_report():
-    data = request.get_json() or {}
+    data = _get_request_data()
     target_type = data.get('target_type')
     target_id = data.get('target_id')
     reason = data.get('reason')

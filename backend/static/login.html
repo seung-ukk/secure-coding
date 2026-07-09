@@ -1,13 +1,40 @@
 <!doctype html>
 <html lang="ko">
-<head><meta charset="utf-8"><title>로그인</title><style>body{font-family:Arial,sans-serif;max-width:480px;margin:2rem auto;padding:1rem}input,button{display:block;width:100%;margin:0.5rem 0;padding:0.6rem}</style></head>
+<head>
+  <meta charset="utf-8">
+  <title>로그인</title>
+  <style>body{font-family:Arial,sans-serif;max-width:480px;margin:2rem auto;padding:1rem}input,button{display:block;width:100%;margin:0.5rem 0;padding:0.6rem}.message{margin:1rem 0;padding:0.75rem;border-radius:4px}.error{background:#ffeaea;color:#b00020}.success{background:#eaf7ea;color:#1b5e20}</style>
+</head>
 <body>
   <h2>로그인</h2>
-  <form action="/api/auth/login" method="post">
-    <input name="identifier" placeholder="이메일 또는 아이디" required>
-    <input name="password" type="password" placeholder="비밀번호" required>
+  <div id="message"></div>
+  <form id="login-form">
+    <input id="identifier" name="identifier" placeholder="이메일 또는 아이디" required>
+    <input id="password" name="password" type="password" placeholder="비밀번호" required>
     <button type="submit">로그인</button>
   </form>
   <p><a href="/register">회원가입 하기</a></p>
+  <script>
+    const form = document.getElementById('login-form');
+    const message = document.getElementById('message');
+    form.addEventListener('submit', async (event) => {
+      event.preventDefault();
+      const formData = new FormData(form);
+      const res = await fetch('/api/auth/login', {
+        method: 'POST',
+        body: formData,
+        credentials: 'same-origin'
+      });
+      const data = await res.json().catch(() => ({}));
+      if (res.ok) {
+        message.className = 'message success';
+        message.textContent = '로그인에 성공했습니다. 메인 페이지로 이동합니다.';
+        setTimeout(() => { window.location.href = '/'; }, 800);
+      } else {
+        message.className = 'message error';
+        message.textContent = data.message || '로그인에 실패했습니다.';
+      }
+    });
+  </script>
 </body>
 </html>

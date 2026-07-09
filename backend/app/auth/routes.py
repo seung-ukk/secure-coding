@@ -7,13 +7,29 @@ from flask_login import login_user, logout_user, current_user, login_required
 from flask_wtf.csrf import generate_csrf
 
 
+def _get_request_data():
+    if request.is_json:
+        return request.get_json(silent=True) or {}
+    return request.form.to_dict()
+
+
+def _coerce_bool(value):
+    if isinstance(value, bool):
+        return value
+    if value is None:
+        return False
+    if isinstance(value, (int, float)):
+        return bool(value)
+    return str(value).strip().lower() not in {'', '0', 'false', 'no', 'off'}
+
+
 @auth_bp.route('/register', methods=['POST'])
 def register():
-    data = request.get_json() or {}
+    data = _get_request_data()
     email = data.get('email')
     username = data.get('username')
     password = data.get('password')
-    agree = data.get('agree_terms')
+    agree = _coerce_bool(data.get('agree_terms'))
     if not email or not username or not password or not agree:
         return jsonify({'error': 'validation', 'message': 'missing fields'}), 400
     # duplicate check
@@ -28,10 +44,10 @@ def register():
 
 @auth_bp.route('/login', methods=['POST'])
 def login():
-    data = request.get_json() or {}
+    data = _get_request_data()
     identifier = data.get('identifier')
     password = data.get('password')
-    remember = bool(data.get('remember_me'))
+    remember = _coerce_bool(data.get('remember_me'))
     if not identifier or not password:
         return jsonify({'error': 'validation', 'message': 'missing credentials'}), 400
     user = User.query.filter((User.email == identifier) | (User.username == identifier)).first()
