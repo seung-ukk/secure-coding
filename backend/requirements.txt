@@ -1,0 +1,9 @@
+Flask==2.3.4
+SQLAlchemy==2.0.20
+Flask-Login==0.7.0
+Flask-WTF==1.1.1
+gunicorn==21.2.0
+bcrypt==4.0.1
+python-dotenv==1.0.0
+Flask-Migrate==4.0.4
+Flask-Cors==4.0.2
