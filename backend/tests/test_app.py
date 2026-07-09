@@ -38,6 +38,25 @@ def test_core_pages_render(client):
         assert response.status_code == 200
 
 
+def test_authenticated_home_page_shows_personalized_content(client):
+    client.post('/api/auth/register', data={
+        'email': 'homeuser@example.com',
+        'username': 'homeuser',
+        'password': 'StrongPass123!',
+        'agree_terms': 'on',
+    })
+    client.post('/api/auth/login', data={
+        'identifier': 'homeuser@example.com',
+        'password': 'StrongPass123!',
+    })
+
+    response = client.get('/')
+    assert response.status_code == 200
+    body = response.get_data(as_text=True)
+    assert 'homeuser' in body
+    assert '상품 조회' in body
+
+
 def test_items_pages_include_interactive_actions(client):
     items_page = client.get('/items')
     assert items_page.status_code == 200
