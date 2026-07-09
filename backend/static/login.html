@@ -1,0 +1,13 @@
+<!doctype html>
+<html lang="ko">
+<head><meta charset="utf-8"><title>로그인</title><style>body{font-family:Arial,sans-serif;max-width:480px;margin:2rem auto;padding:1rem}input,button{display:block;width:100%;margin:0.5rem 0;padding:0.6rem}</style></head>
+<body>
+  <h2>로그인</h2>
+  <form action="/api/auth/login" method="post">
+    <input name="identifier" placeholder="이메일 또는 아이디" required>
+    <input name="password" type="password" placeholder="비밀번호" required>
+    <button type="submit">로그인</button>
+  </form>
+  <p><a href="/register">회원가입 하기</a></p>
+</body>
+</html>

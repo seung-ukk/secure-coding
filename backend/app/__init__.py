@@ -43,4 +43,24 @@ def create_app(config_object: str = 'app.config.Config'):
     def health():
         return {'status': 'ok'}
 
+    @app.route('/')
+    def index():
+        return app.send_static_file('index.html')
+
+    @app.route('/login')
+    def login_page():
+        return app.send_static_file('login.html')
+
+    @app.route('/register')
+    def register_page():
+        return app.send_static_file('register.html')
+
+    @app.route('/items')
+    def items_page():
+        return app.send_static_file('items.html')
+
+    @app.route('/items/<int:item_id>')
+    def item_detail_page(item_id):
+        return app.send_static_file('item_detail.html')
+
     return app
