@@ -7,4 +7,4 @@ class Config:
     SQLALCHEMY_TRACK_MODIFICATIONS = False
     UPLOAD_FOLDER = os.environ.get('UPLOAD_FOLDER', '/tmp/secure_media')
     MAX_CONTENT_LENGTH = 16 * 1024 * 1024
-    WTF_CSRF_ENABLED = os.environ.get('WTF_CSRF_ENABLED', 'false').lower() not in {'0', 'false', 'no', 'off'}
+    WTF_CSRF_ENABLED = os.environ.get('WTF_CSRF_ENABLED', 'true').lower() not in {'0', 'false', 'no', 'off'}

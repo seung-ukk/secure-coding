@@ -1,4 +1,4 @@
-from flask import request, jsonify, current_app
+from flask import request, jsonify, current_app, abort
 from app.items import items_bp
 from app import db
 from app.models import Item, ItemImage, User
@@ -13,7 +13,7 @@ def list_items():
     q = request.args.get('q')
     page = int(request.args.get('page', 1))
     per_page = min(int(request.args.get('per_page', 20)), 50)
-    query = Item.query.order_by(Item.created_at.desc())
+    query = Item.query.filter(Item.status.notin_(['deleted', 'blocked'])).order_by(Item.created_at.desc())
     if q:
         query = query.filter(Item.title.ilike(f"%{q}%"))
     items = query.paginate(page=page, per_page=per_page, error_out=False)
@@ -65,8 +65,11 @@ def create_item():
 @items_bp.route('/<int:item_id>', methods=['GET'])
 def get_item(item_id):
     it = Item.query.get_or_404(item_id)
+    if it.status in ('deleted', 'blocked'):
+        if not current_user.is_authenticated or (current_user.id != it.owner_id and current_user.role != 'admin'):
+            abort(404)
     images = ItemImage.query.filter_by(item_id=it.id).all()
-    imgs = [img.file_path for img in images]
+    imgs = [f"/api/media/{os.path.basename(img.file_path)}" for img in images]
     owner = User.query.get(it.owner_id)
     return jsonify({'id': it.id, 'title': it.title, 'description': it.description, 'price': float(it.price), 'images': imgs, 'owner': {'id': owner.id, 'username': owner.username}, 'status': it.status})
 
@@ -97,3 +100,72 @@ def request_purchase(item_id):
     db.session.add(tx)
     db.session.commit()
     return jsonify({'transaction_id': tx.id, 'status': tx.status}), 201
+
+
+@items_bp.route('/<int:item_id>', methods=['PATCH'])
+@login_required
+def update_item(item_id):
+    it = Item.query.get_or_404(item_id)
+    if it.owner_id != current_user.id:
+        return jsonify({'error': 'forbidden', 'message': 'You do not own this item'}), 403
+    
+    if it.status in ('deleted', 'blocked'):
+        return jsonify({'error': 'validation', 'message': f'Cannot update item in status {it.status}'}), 400
+
+    data = request.get_json() if request.is_json else request.form.to_dict()
+
+    title = data.get('title')
+    description = data.get('description')
+    price = data.get('price')
+    status = data.get('status')
+
+    if title is not None:
+        title = title.strip()
+        if not title:
+            return jsonify({'error': 'validation', 'message': 'Title cannot be empty'}), 400
+        it.title = title
+
+    if description is not None:
+        it.description = description.strip()
+
+    if price is not None:
+        try:
+            price_val = float(price)
+            if price_val < 0:
+                return jsonify({'error': 'validation', 'message': 'Price cannot be negative'}), 400
+            it.price = price_val
+        except Exception:
+            return jsonify({'error': 'validation', 'message': 'Invalid price format'}), 400
+
+    if status is not None:
+        status = status.strip().lower()
+        if status not in ('available', 'reserved', 'sold'):
+            return jsonify({'error': 'validation', 'message': 'Invalid status'}), 400
+        it.status = status
+
+    db.session.commit()
+    return jsonify({
+        'id': it.id,
+        'title': it.title,
+        'description': it.description,
+        'price': float(it.price),
+        'status': it.status
+    }), 200
+
+
+@items_bp.route('/<int:item_id>', methods=['DELETE'])
+@login_required
+def delete_item(item_id):
+    it = Item.query.get_or_404(item_id)
+    if it.owner_id != current_user.id and current_user.role != 'admin':
+        return jsonify({'error': 'forbidden', 'message': 'Permission denied'}), 403
+        
+    it.status = 'deleted'
+    
+    from app.models import AuditLog
+    details = f"item {it.id} deleted by user {current_user.id}"
+    log = AuditLog(actor_id=current_user.id, action='delete_item', target_type='item', target_id=it.id, details=details)
+    db.session.add(log)
+    db.session.commit()
+    
+    return jsonify({'status': 'success', 'message': 'Item soft deleted successfully'}), 200

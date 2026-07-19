@@ -1,6 +1,6 @@
 import os
 from pathlib import Path
-from flask import Flask
+from flask import Flask, send_from_directory
 from flask_sqlalchemy import SQLAlchemy
 from flask_login import LoginManager, current_user
 from flask_wtf import CSRFProtect
@@ -34,6 +34,8 @@ def create_app(config_object: str = 'app.config.Config'):
     from app.reports.routes import reports_bp
     from app.admin.routes import admin_bp
     from app.payments.routes import payments_bp
+    from app.users import users_bp
+    from app.chat import chat_bp
 
     with app.app_context():
         db.create_all()
@@ -44,11 +46,19 @@ def create_app(config_object: str = 'app.config.Config'):
     app.register_blueprint(reports_bp, url_prefix='/api/reports')
     app.register_blueprint(admin_bp, url_prefix='/api/admin')
     app.register_blueprint(payments_bp, url_prefix='/api/payments')
+    app.register_blueprint(users_bp, url_prefix='/api')
+    app.register_blueprint(chat_bp, url_prefix='/api/chat')
 
     # simple health route
     @app.route('/health')
     def health():
         return {'status': 'ok'}
+
+    @app.route('/api/media/<filename>')
+    def serve_media(filename):
+        upload_folder = app.config.get('UPLOAD_FOLDER') or '/tmp/secure_media'
+        os.makedirs(upload_folder, exist_ok=True)
+        return send_from_directory(upload_folder, filename)
 
     @app.route('/')
     def index():

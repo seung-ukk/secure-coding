@@ -19,16 +19,49 @@ def create_report():
     target_id = data.get('target_id')
     reason = data.get('reason')
     details = data.get('details')
+    
     if target_type not in ('item', 'user') or not target_id or not reason:
         return jsonify({'error': 'validation'}), 400
-    # basic existence check
-    if target_type == 'item' and not Item.query.get(target_id):
-        return jsonify({'error': 'not_found'}), 404
-    if target_type == 'user' and not User.query.get(target_id):
-        return jsonify({'error': 'not_found'}), 404
+        
+    # Prevent self-reporting and check existence
+    if target_type == 'user':
+        if int(target_id) == current_user.id:
+            return jsonify({'error': 'validation', 'message': 'Cannot report yourself'}), 400
+        target = User.query.get(target_id)
+        if not target:
+            return jsonify({'error': 'not_found'}), 404
+    else: # item
+        target = Item.query.get(target_id)
+        if not target:
+            return jsonify({'error': 'not_found'}), 404
+        if target.owner_id == current_user.id:
+            return jsonify({'error': 'validation', 'message': 'Cannot report your own item'}), 400
+
+    # Prevent duplicate reports from the same user
+    existing = Report.query.filter_by(reporter_id=current_user.id, target_type=target_type, target_id=target_id).first()
+    if existing:
+        return jsonify({'error': 'conflict', 'message': 'You have already reported this target'}), 409
+
     rpt = Report(reporter_id=current_user.id, target_type=target_type, target_id=target_id, reason=reason, details=details)
     db.session.add(rpt)
     db.session.commit()
-    # simple aggregation
+
+    # Calculate actual unique report count
     count = Report.query.filter_by(target_type=target_type, target_id=target_id).count()
-    return jsonify({'report_id': rpt.id, 'target_type': target_type, 'target_id': target_id, 'current_count_for_target': count}), 201
+    
+    # Auto-blocking logic (Threshold: 5 reports)
+    if count >= 5:
+        if target_type == 'item':
+            target.status = 'blocked'
+        else: # user
+            target.is_active = False
+        db.session.commit()
+
+    return jsonify({
+        'report_id': rpt.id,
+        'target_type': target_type,
+        'target_id': target_id,
+        'current_count_for_target': count,
+        'target_status': target.status if target_type == 'item' else ('active' if target.is_active else 'inactive')
+    }), 201
+
