@@ -47,13 +47,39 @@ Copy-Item backend/.env.example backend/.env
 * `UPLOAD_FOLDER`: 파일 업로드 경로
 * `WTF_CSRF_ENABLED`: CSRF 보안 설정 여부 (기본값: `true`)
 
-## 4. 데이터베이스 초기화
-가상환경이 활성화된 상태에서 아래 명령어를 실행하여 DB를 초기화합니다.
+## 4. 데이터베이스 초기화 및 초기화(Reset) 방법
+
+### 최초 초기화 시:
+가상환경이 활성화된 상태에서 아래 명령어를 실행하여 DB 테이블을 생성합니다.
 ```bash
 cd backend
-# 환경변수 설정 후 실행
 python -m flask --app run db init
 python -m flask --app run db migrate -m "initial migration"
+python -m flask --app run db upgrade
+```
+
+### 테스트 데이터 및 DB 전체 리셋 (초기화) 시:
+개발 또는 테스트 중 적재된 임시 데이터(사용자, 상품, 채팅, 신고 기록 등)와 업로드 미디어를 초기화하여 신규 테스트를 진행하고자 할 때 아래 순서대로 수행합니다.
+
+**macOS / Linux:**
+```bash
+cd backend
+# 1. 업로드된 미디어 파일 제거
+rm -rf /tmp/secure_media/*
+
+# 2. 기존 SQLite DB 파일 삭제 및 스키마 재구성
+rm -f instance/app.db
+python -m flask --app run db upgrade
+```
+
+**Windows (PowerShell):**
+```powershell
+cd backend
+# 1. 업로드된 미디어 파일 제거
+Remove-Item -Path C:/tmp/secure_media/* -Recurse -Force -ErrorAction SilentlyContinue
+
+# 2. 기존 SQLite DB 파일 삭제 및 스키마 재구성
+Remove-Item -Path instance/app.db -ErrorAction SilentlyContinue
 python -m flask --app run db upgrade
 ```
 

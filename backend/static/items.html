@@ -49,12 +49,17 @@
 
     document.getElementById('create-item-form').addEventListener('submit', async (event) => {
       event.preventDefault();
+      const csrfRes = await fetch('/api/auth/csrf-token');
+      const csrfData = await csrfRes.json().catch(() => ({}));
       const form = event.target;
       const formData = new FormData(form);
       const res = await fetch('/api/items', {
         method: 'POST',
         body: formData,
-        credentials: 'same-origin'
+        credentials: 'same-origin',
+        headers: {
+          'X-CSRFToken': csrfData.csrf_token || ''
+        }
       });
       if (res.ok) {
         form.reset();

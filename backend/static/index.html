@@ -41,7 +41,13 @@
         registerLink.style.display = 'none';
         dashboardLink.style.display = 'inline';
         document.getElementById('logout-btn').addEventListener('click', async () => {
-          await fetch('/api/auth/logout', { method: 'POST', credentials: 'same-origin' });
+          const csrfRes = await fetch('/api/auth/csrf-token');
+          const csrfData = await csrfRes.json().catch(() => ({}));
+          await fetch('/api/auth/logout', { 
+            method: 'POST', 
+            credentials: 'same-origin',
+            headers: { 'X-CSRFToken': csrfData.csrf_token || '' }
+          });
           window.location.reload();
         });
       } else {

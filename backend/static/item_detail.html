@@ -49,7 +49,15 @@
     }
 
     async function requestPurchase() {
-      const res = await fetch(`/api/items/${itemId}/request`, { method: 'POST', credentials: 'same-origin' });
+      const csrfRes = await fetch('/api/auth/csrf-token');
+      const csrfData = await csrfRes.json().catch(() => ({}));
+      const res = await fetch(`/api/items/${itemId}/request`, { 
+        method: 'POST', 
+        credentials: 'same-origin',
+        headers: {
+          'X-CSRFToken': csrfData.csrf_token || ''
+        }
+      });
       const data = await res.json().catch(() => ({}));
       const box = document.getElementById('message-box');
       if (res.ok) {
@@ -80,10 +88,15 @@
       if (!currentTransactionId) return;
       const content = document.getElementById('chat-content').value.trim();
       if (!content) return;
+      const csrfRes = await fetch('/api/auth/csrf-token');
+      const csrfData = await csrfRes.json().catch(() => ({}));
       const res = await fetch(`/api/transactions/${currentTransactionId}/messages`, {
         method: 'POST',
         credentials: 'same-origin',
-        headers: { 'Content-Type': 'application/json' },
+        headers: { 
+          'Content-Type': 'application/json',
+          'X-CSRFToken': csrfData.csrf_token || ''
+        },
         body: JSON.stringify({ content })
       });
       if (res.ok) {
