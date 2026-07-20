@@ -68,7 +68,7 @@ def logout():
 @auth_bp.route('/status', methods=['GET'])
 def status():
     if current_user and current_user.is_authenticated:
-        return jsonify({'authenticated': True, 'user': {'id': current_user.id, 'username': current_user.username}})
+        return jsonify({'authenticated': True, 'user': {'id': current_user.id, 'username': current_user.username, 'role': current_user.role}})
     return jsonify({'authenticated': False})
 
 

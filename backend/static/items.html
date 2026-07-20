@@ -3,73 +3,208 @@
 <head>
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width, initial-scale=1">
-  <title>상품 목록</title>
+  <title>상품 목록 - TinyMarket</title>
   <link rel="stylesheet" href="/static/style.css">
+  <script src="/static/app.js" defer></script>
 </head>
 <body>
-  <nav>
-    <a href="/">홈</a>
-    <a href="/items">상품 목록</a>
-    <a href="/dashboard">대시보드</a>
-  </nav>
-  <h2>상품 목록</h2>
-  <p>이 페이지에서 판매글을 등록하면, 등록 즉시 목록에 반영됩니다.</p>
+  <!-- Global Navigation Header -->
+  <header id="global-header"></header>
 
-  <h3>판매글 등록</h3>
-  <form id="create-item-form">
-    <input name="title" placeholder="상품명" required>
-    <textarea name="description" placeholder="설명"></textarea>
-    <input name="price" type="number" placeholder="가격" required>
-    <button type="submit">등록하기</button>
-  </form>
+  <!-- Title & Controls Header -->
+  <div style="display: flex; flex-wrap: wrap; justify-content: space-between; align-items: center; gap: 1rem; margin-bottom: 2rem;">
+    <div>
+      <h2 style="margin: 0;">🛍️ 전체 상품 목록</h2>
+      <p style="margin: 0.25rem 0 0; color: var(--text-secondary);">등록된 중고 물품을 탐색하거나 판매글을 등록해보세요.</p>
+    </div>
+    <button id="open-create-modal-btn" type="button" style="display: flex; align-items: center; gap: 0.5rem;">
+      <span>➕</span> 판매글 등록하기
+    </button>
+  </div>
 
-  <h3>현재 판매 목록</h3>
-  <div id="item-list">불러오는 중...</div>
+  <!-- Search Bar -->
+  <div style="margin-bottom: 2rem; display: flex; gap: 0.5rem; background: var(--bg-card); padding: 0.75rem; border-radius: 12px; border: 1px solid var(--border-color);">
+    <input type="text" id="items-search-input" placeholder="상품명 검색..." style="flex:1; background: transparent; border: none; outline: none; padding: 0.5rem 0.75rem; color: var(--text-primary); font-size: 1rem;">
+    <button id="items-search-btn" type="button" style="padding: 0.5rem 1.25rem;">검색</button>
+  </div>
 
-  <p><a href="/">홈으로</a></p>
+  <!-- Items Grid -->
+  <div id="item-list" class="grid">
+    <div class="card" style="grid-column: 1 / -1; text-align: center; color: var(--text-secondary);">상품을 불러오는 중...</div>
+  </div>
+
+  <!-- Create Item Modal -->
+  <div id="create-item-modal" class="modal-overlay">
+    <div class="modal-content">
+      <div class="modal-header">
+        <h3 class="modal-title">✨ 새 판매글 등록</h3>
+        <button id="close-create-modal-btn" class="modal-close" type="button">&times;</button>
+      </div>
+      <form id="create-item-form">
+        <div>
+          <label style="display:block; margin-bottom: 0.4rem; font-weight: 500;">상품명</label>
+          <input name="title" placeholder="상품 제목을 입력하세요" required>
+        </div>
+        <div>
+          <label style="display:block; margin-bottom: 0.4rem; font-weight: 500;">판매 가격 (원)</label>
+          <input name="price" type="number" min="0" placeholder="예: 50000" required>
+        </div>
+        <div>
+          <label style="display:block; margin-bottom: 0.4rem; font-weight: 500;">상품 설명</label>
+          <textarea name="description" rows="4" placeholder="상품 상태, 구매 시기, 거래 방법 등을 자세히 적어주세요."></textarea>
+        </div>
+        <div>
+          <label style="display:block; margin-bottom: 0.4rem; font-weight: 500;">상품 이미지 (다중 선택 가능)</label>
+          <input type="file" name="images[]" id="modal-image-input" multiple accept="image/*" style="padding: 0.5rem;">
+          <div id="modal-image-preview" class="image-preview-container"></div>
+        </div>
+        <div style="margin-top: 1rem; display: flex; gap: 0.75rem; justify-content: flex-end;">
+          <button id="cancel-create-btn" type="button" style="background: transparent; border: 1px solid var(--border-color); color: var(--text-secondary);">취소</button>
+          <button type="submit">등록하기</button>
+        </div>
+      </form>
+    </div>
+  </div>
 
   <script>
-    async function loadItems() {
-      const res = await fetch('/api/items');
-      const data = await res.json();
-      const container = document.getElementById('item-list');
-      if (!data.items || !data.items.length) {
-        container.innerHTML = '<p>등록된 상품이 없습니다.</p>';
-        return;
-      }
-      container.innerHTML = data.items.map(item => `
-        <div class="card">
-          <a href="/items/${item.id}" style="display:block;margin-bottom:0.75rem">
-            <div style="width:100%;height:120px;background:#f3f4f6;display:flex;align-items:center;justify-content:center;border-radius:8px">상품 이미지</div>
-          </a>
-          <a href="/items/${item.id}">${item.title}</a> - ${item.price.toLocaleString()}원
-        </div>
-      `).join('');
+    const urlParams = new URLSearchParams(window.location.search);
+    let currentSearchQuery = urlParams.get('q') || '';
+
+    if (currentSearchQuery) {
+      document.getElementById('items-search-input').value = currentSearchQuery;
     }
 
+    async function loadItems() {
+      const container = document.getElementById('item-list');
+      const searchUrl = currentSearchQuery 
+        ? `/api/items?q=${encodeURIComponent(currentSearchQuery)}` 
+        : '/api/items';
+
+      try {
+        const res = await fetch(searchUrl);
+        const data = await res.json();
+
+        if (!data.items || !data.items.length) {
+          container.innerHTML = `
+            <div class="card" style="grid-column: 1 / -1; text-align: center; padding: 3rem 1.5rem;">
+              <p style="font-size: 1.1rem; color: var(--text-secondary); margin-bottom: 1rem;">
+                ${currentSearchQuery ? `'${currentSearchQuery}' 검색 결과가 없습니다.` : '등록된 상품이 없습니다.'}
+              </p>
+              <button id="empty-create-btn" type="button">첫 상품 등록하기</button>
+            </div>
+          `;
+          const emptyBtn = document.getElementById('empty-create-btn');
+          if (emptyBtn) emptyBtn.addEventListener('click', openModal);
+          return;
+        }
+
+        container.innerHTML = data.items.map(item => `
+          <div class="card" style="display: flex; flex-direction: column; justify-content: space-between;">
+            <div>
+              <a href="/items/${item.id}" style="display:block; margin-bottom: 0.75rem; text-decoration:none;">
+                <div style="width:100%; height:180px; background: rgba(255,255,255,0.03); border: 1px solid var(--border-color); display:flex; align-items:center; justify-content:center; border-radius:8px; font-size: 2.5rem; overflow:hidden;">
+                  📦
+                </div>
+              </a>
+              <h3 style="margin: 0.5rem 0 0.25rem; font-size: 1.15rem;">
+                <a href="/items/${item.id}" style="color: var(--text-primary); text-decoration: none;">${item.title}</a>
+              </h3>
+            </div>
+            <div style="margin-top: 1rem; display: flex; justify-content: space-between; align-items: center;">
+              <span style="font-size: 1.2rem; font-weight: 700; color: var(--text-primary);">${formatPrice(item.price)}</span>
+              ${getStatusBadge(item.status || 'available')}
+            </div>
+          </div>
+        `).join('');
+      } catch (err) {
+        container.innerHTML = '<div class="card" style="grid-column: 1 / -1; text-align: center; color: var(--error);">상품 목록을 로드하는 데 실패했습니다.</div>';
+      }
+    }
+
+    // Modal Control
+    const modal = document.getElementById('create-item-modal');
+    const openModalBtn = document.getElementById('open-create-modal-btn');
+    const closeModalBtn = document.getElementById('close-create-modal-btn');
+    const cancelModalBtn = document.getElementById('cancel-create-btn');
+
+    async function openModal() {
+      const authRes = await fetch('/api/auth/status', { credentials: 'same-origin' });
+      const authData = await authRes.json().catch(() => ({}));
+      if (!authData.authenticated) {
+        alert('상품을 등록하려면 먼저 로그인해주세요.');
+        window.location.href = '/login';
+        return;
+      }
+      modal.classList.add('active');
+    }
+
+    function closeModal() {
+      modal.classList.remove('active');
+      document.getElementById('create-item-form').reset();
+      document.getElementById('modal-image-preview').innerHTML = '';
+    }
+
+    openModalBtn.addEventListener('click', openModal);
+    closeModalBtn.addEventListener('click', closeModal);
+    cancelModalBtn.addEventListener('click', closeModal);
+
+    // Image Preview
+    document.getElementById('modal-image-input').addEventListener('change', (e) => {
+      const previewContainer = document.getElementById('modal-image-preview');
+      previewContainer.innerHTML = '';
+      const files = Array.from(e.target.files);
+
+      files.forEach(file => {
+        if (!file.type.startsWith('image/')) return;
+        const reader = new FileReader();
+        reader.onload = (event) => {
+          const img = document.createElement('img');
+          img.src = event.target.result;
+          img.className = 'preview-thumb';
+          previewContainer.appendChild(img);
+        };
+        reader.readAsDataURL(file);
+      });
+    });
+
+    // Search Action
+    function performSearch() {
+      currentSearchQuery = document.getElementById('items-search-input').value.trim();
+      loadItems();
+    }
+
+    document.getElementById('items-search-btn').addEventListener('click', performSearch);
+    document.getElementById('items-search-input').addEventListener('keyup', (e) => {
+      if (e.key === 'Enter') performSearch();
+    });
+
+    // Form Submit
     document.getElementById('create-item-form').addEventListener('submit', async (event) => {
       event.preventDefault();
-      const csrfRes = await fetch('/api/auth/csrf-token');
-      const csrfData = await csrfRes.json().catch(() => ({}));
-      const form = event.target;
-      const formData = new FormData(form);
-      const res = await fetch('/api/items', {
-        method: 'POST',
-        body: formData,
-        credentials: 'same-origin',
-        headers: {
-          'X-CSRFToken': csrfData.csrf_token || ''
+      const csrfToken = await getCsrfToken();
+      const formData = new FormData(event.target);
+
+      try {
+        const res = await fetch('/api/items', {
+          method: 'POST',
+          body: formData,
+          credentials: 'same-origin',
+          headers: { 'X-CSRFToken': csrfToken }
+        });
+
+        if (res.ok) {
+          closeModal();
+          await loadItems();
+        } else {
+          const errData = await res.json().catch(() => ({}));
+          alert(errData.message || '판매글 등록에 실패했습니다.');
         }
-      });
-      if (res.ok) {
-        form.reset();
-        await loadItems();
-      } else {
-        alert('판매글 등록에 실패했습니다.');
+      } catch (err) {
+        alert('서버통신 오류가 발생했습니다.');
       }
     });
 
-    loadItems();
+    document.addEventListener('DOMContentLoaded', loadItems);
   </script>
 </body>
 </html>

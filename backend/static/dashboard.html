@@ -3,59 +3,319 @@
 <head>
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width, initial-scale=1">
-  <title>내 대시보드</title>
+  <title>내 대시보드 - TinyMarket</title>
   <link rel="stylesheet" href="/static/style.css">
+  <script src="/static/app.js" defer></script>
 </head>
 <body>
-  <nav>
-    <a href="/">홈</a>
-    <a href="/items">상품 목록</a>
-  </nav>
-  <h2>내 대시보드</h2>
-  <p>로그인한 사용자의 상품과 거래 요청을 확인할 수 있습니다.</p>
-  <div id="status">불러오는 중...</div>
-  <h3>내 판매글</h3>
-  <div id="my-items"></div>
-  <h3>내 거래 요청</h3>
-  <div id="my-transactions"></div>
-  <p><a href="/">홈으로</a></p>
-  <script>
-    async function loadDashboard() {
-      const statusEl = document.getElementById('status');
-      const itemsEl = document.getElementById('my-items');
-      const txEl = document.getElementById('my-transactions');
+  <!-- Global Navigation Header -->
+  <header id="global-header"></header>
 
+  <!-- User Welcome Card -->
+  <div id="user-welcome-card" class="dashboard-user-welcome">
+    <div>
+      <h2 style="margin: 0; font-size: 1.5rem;">내 대시보드</h2>
+      <p id="welcome-message" style="margin: 0.25rem 0 0; color: var(--text-secondary);">불러오는 중...</p>
+    </div>
+    <a href="/items" class="btn-nav-primary" style="text-decoration: none;">➕ 새 상품 등록하기</a>
+  </div>
+
+  <!-- Tab Navigation -->
+  <div class="tab-header-nav">
+    <button class="tab-btn active" data-tab="tab-items" type="button">📦 내 판매글</button>
+    <button class="tab-btn" data-tab="tab-transactions" type="button">💬 내 거래 & 채팅</button>
+    <button class="tab-btn" data-tab="tab-profile" type="button">👤 내 프로필</button>
+  </div>
+
+  <!-- Tab 1: My Items -->
+  <div id="tab-items" class="tab-pane active">
+    <div id="my-items-list" class="grid">
+      <div class="card" style="grid-column: 1 / -1; text-align: center;">판매글을 불러오는 중...</div>
+    </div>
+  </div>
+
+  <!-- Tab 2: My Transactions -->
+  <div id="tab-transactions" class="tab-pane">
+    <div id="my-transactions-list" style="display: flex; flex-direction: column; gap: 1.25rem;">
+      <div class="card" style="text-align: center;">거래 내역을 불러오는 중...</div>
+    </div>
+  </div>
+
+  <!-- Tab 3: My Profile -->
+  <div id="tab-profile" class="tab-pane">
+    <div class="card" style="max-width: 600px;">
+      <h3 style="margin-top:0;">내 계정 정보</h3>
+      <div id="profile-info-content">
+        <p>프로필 정보를 불러오는 중...</p>
+      </div>
+    </div>
+  </div>
+
+  <script>
+    let currentUserId = null;
+
+    // Tab Switcher Logic
+    document.querySelectorAll('.tab-btn').forEach(btn => {
+      btn.addEventListener('click', () => {
+        document.querySelectorAll('.tab-btn').forEach(b => b.classList.remove('active'));
+        document.querySelectorAll('.tab-pane').forEach(p => p.classList.remove('active'));
+        
+        btn.classList.add('active');
+        const targetTab = btn.getAttribute('data-tab');
+        const targetPane = document.getElementById(targetTab);
+        if (targetPane) targetPane.classList.add('active');
+      });
+    });
+
+    async function loadDashboard() {
       const authRes = await fetch('/api/auth/status', { credentials: 'same-origin' });
       const authData = await authRes.json().catch(() => ({}));
+
       if (!authData.authenticated) {
-        statusEl.innerHTML = '로그인이 필요합니다.';
+        alert('로그인이 필요한 페이지입니다.');
+        window.location.href = '/login';
         return;
       }
 
-      statusEl.innerHTML = `안녕하세요, <strong>${authData.user?.username || '사용자'}</strong>님!`;
+      currentUserId = authData.user?.id;
+      document.getElementById('welcome-message').innerHTML = `안녕하세요, <strong>${authData.user?.username}</strong>님! 반가워요 ✨`;
 
-      const itemsRes = await fetch('/api/items/mine', { credentials: 'same-origin' });
-      const itemsData = await itemsRes.json().catch(() => ({ items: [] }));
-      itemsEl.innerHTML = (itemsData.items || []).length
-        ? itemsData.items.map(item => `<div class="card">${item.title} - ${item.price.toLocaleString()}원 (상태: ${item.status})</div>`).join('')
-        : '<p>등록한 판매글이 없습니다.</p>';
+      // Fill Profile Tab
+      document.getElementById('profile-info-content').innerHTML = `
+        <div style="display: flex; flex-direction: column; gap: 0.75rem; font-size: 1rem;">
+          <div>👤 <strong>사용자명:</strong> ${authData.user?.username}</div>
+          <div>🆔 <strong>회원 ID:</strong> #${authData.user?.id}</div>
+          <div>🛡️ <strong>계정 상태:</strong> <span class="status-badge available">정상 (Active)</span></div>
+        </div>
+      `;
 
-      const txRes = await fetch('/api/transactions/mine', { credentials: 'same-origin' });
-      const txData = await txRes.json().catch(() => ({ transactions: [] }));
-      txEl.innerHTML = (txData.transactions || []).length
-        ? txData.transactions.map(tx => `
-          <div class="card">
-            <strong>거래 #${tx.id}</strong><br>
-            상품 ID: ${tx.item_id} / 상태: ${tx.status}<br>
-            <div style="margin-top:0.5rem">
-              ${((tx.messages || []).length ? tx.messages.map(msg => `<div>• ${msg.content}</div>`).join('') : '<div>메시지가 없습니다.</div>')}
-            </div>
-          </div>
-        `).join('')
-        : '<p>진행 중인 거래가 없습니다.</p>';
+      // Load My Items
+      await loadMyItems();
+
+      // Load My Transactions
+      await loadMyTransactions();
     }
 
-    loadDashboard();
+    async function loadMyItems() {
+      const container = document.getElementById('my-items-list');
+      try {
+        const res = await fetch('/api/items/mine', { credentials: 'same-origin' });
+        const data = await res.json().catch(() => ({ items: [] }));
+
+        if (!data.items || data.items.length === 0) {
+          container.innerHTML = '<div class="card" style="grid-column: 1 / -1; text-align: center;">등록된 내 판매글이 없습니다.</div>';
+          return;
+        }
+
+        container.innerHTML = data.items.map(item => `
+          <div class="card" style="display: flex; flex-direction: column; justify-content: space-between;">
+            <div>
+              <div style="display: flex; justify-content: space-between; align-items: flex-start; margin-bottom: 0.5rem;">
+                <h3 style="margin: 0; font-size: 1.15rem;">
+                  <a href="/items/${item.id}" style="color: var(--text-primary); text-decoration: none;">${item.title}</a>
+                </h3>
+                <div id="dashboard-item-badge-${item.id}">${getStatusBadge(item.status || 'available')}</div>
+              </div>
+              <div style="font-size: 1.2rem; font-weight: 700; color: var(--text-primary); margin-bottom: 1rem;">
+                ${formatPrice(item.price)}
+              </div>
+            </div>
+
+            <div style="background: rgba(0,0,0,0.2); border: 1px solid var(--border-color); border-radius: 8px; padding: 0.75rem; display: flex; flex-direction: column; gap: 0.5rem; margin-top: 0.5rem;">
+              <span style="font-size: 0.85rem; color: var(--text-secondary); font-weight: 600;">🔄 상태 직접 변경</span>
+              <select class="status-select-dropdown item-status-switcher" data-item-id="${item.id}" style="width: 100%; font-size: 0.85rem; padding: 0.4rem 0.6rem;">
+                <option value="available" ${item.status === 'available' ? 'selected' : ''}>판매중</option>
+                <option value="reserved" ${item.status === 'reserved' ? 'selected' : ''}>예약중</option>
+                <option value="sold" ${item.status === 'sold' ? 'selected' : ''}>판매완료</option>
+              </select>
+            </div>
+          </div>
+        `).join('');
+
+        // Bind Status Switcher Listener
+        const switchers = container.querySelectorAll('.item-status-switcher');
+        switchers.forEach(sw => {
+          sw.addEventListener('change', async (e) => {
+            const targetItemId = sw.getAttribute('data-item-id');
+            const newStatus = e.target.value;
+            const csrfToken = await getCsrfToken();
+
+            const patchRes = await fetch(`/api/items/${targetItemId}`, {
+              method: 'PATCH',
+              credentials: 'same-origin',
+              headers: {
+                'Content-Type': 'application/json',
+                'X-CSRFToken': csrfToken
+              },
+              body: JSON.stringify({ status: newStatus })
+            });
+
+            if (patchRes.ok) {
+              const badgeBox = document.getElementById(`dashboard-item-badge-${targetItemId}`);
+              if (badgeBox) badgeBox.innerHTML = getStatusBadge(newStatus);
+            } else {
+              alert('상태 변경에 실패했습니다.');
+            }
+          });
+        });
+
+      } catch (err) {
+        container.innerHTML = '<div class="card" style="grid-column: 1 / -1; text-align: center; color: var(--error);">판매글 목록을 로드하는 데 실패했습니다.</div>';
+      }
+    }
+
+    async function loadMyTransactions() {
+      const container = document.getElementById('my-transactions-list');
+      try {
+        const res = await fetch('/api/transactions/mine', { credentials: 'same-origin' });
+        const data = await res.json().catch(() => ({ transactions: [] }));
+
+        if (!data.transactions || data.transactions.length === 0) {
+          container.innerHTML = '<div class="card" style="text-align: center;">진행 중인 거래 또는 대화 요청이 없습니다.</div>';
+          return;
+        }
+
+        container.innerHTML = data.transactions.map(tx => {
+          const isSellerRole = tx.seller_id === currentUserId;
+          const roleLabel = isSellerRole ? '🏷️ 내가 판매자' : '🛒 내가 구매자';
+
+          const msgsHtml = (tx.messages || []).length
+            ? tx.messages.map(msg => {
+                const isMine = msg.sender_id === currentUserId;
+                const bubbleClass = isMine ? 'chat-bubble mine' : 'chat-bubble other';
+                const senderLabel = isMine ? '나' : (isSellerRole ? '구매자' : '판매자');
+                const timeStr = msg.created_at ? new Date(msg.created_at).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }) : '';
+
+                return `
+                  <div class="${bubbleClass}">
+                    <div class="chat-meta">
+                      <span>${senderLabel}</span>
+                      <span>${timeStr}</span>
+                    </div>
+                    <div class="chat-text">${msg.content}</div>
+                  </div>
+                `;
+              }).join('')
+            : '<p style="padding: 1rem; color: var(--text-secondary); margin: 0;">아직 주고받은 메시지가 없습니다.</p>';
+
+          return `
+            <div class="card" style="display: flex; flex-direction: column; gap: 0.75rem;">
+              <div style="display: flex; justify-content: space-between; align-items: center; border-bottom: 1px solid var(--border-color); padding-bottom: 0.5rem;">
+                <div>
+                  <strong>거래 #${tx.id}</strong>
+                  <span style="font-size: 0.85rem; color: var(--accent-blue); margin-left: 0.5rem;">${roleLabel}</span>
+                </div>
+                <a href="/items/${tx.item_id}" style="font-size: 0.9rem; font-weight: 600;">상품 보러가기 &rarr;</a>
+              </div>
+
+              <div id="dashboard-chat-${tx.id}" style="
+                max-height: 220px; 
+                overflow-y: auto; 
+                display: flex; 
+                flex-direction: column; 
+                gap: 0.6rem; 
+                padding: 0.75rem; 
+                background: rgba(0, 0, 0, 0.2); 
+                border: 1px solid var(--border-color); 
+                border-radius: 8px;
+              ">
+                ${msgsHtml}
+              </div>
+
+              <form class="dashboard-chat-form" data-tx-id="${tx.id}" style="display: flex; gap: 0.5rem;">
+                <input type="text" class="dashboard-chat-input" placeholder="답장을 입력하세요..." required style="flex: 1; padding: 0.5rem 0.75rem; font-size: 0.9rem; margin: 0;">
+                <button type="submit" style="padding: 0.5rem 1.25rem; font-size: 0.9rem; white-space: nowrap;">전송</button>
+              </form>
+            </div>
+          `;
+        }).join('');
+
+        // Scroll to bottom for each chat box
+        data.transactions.forEach(tx => {
+          const chatBox = document.getElementById(`dashboard-chat-${tx.id}`);
+          if (chatBox) chatBox.scrollTop = chatBox.scrollHeight;
+        });
+
+        // Form Submit Listeners
+        const forms = container.querySelectorAll('.dashboard-chat-form');
+        forms.forEach(form => {
+          form.addEventListener('submit', async (e) => {
+            e.preventDefault();
+            const txId = form.getAttribute('data-tx-id');
+            const input = form.querySelector('.dashboard-chat-input');
+            const content = input.value.trim();
+            if (!content) return;
+
+            const csrfToken = await getCsrfToken();
+            const res = await fetch(`/api/transactions/${txId}/messages`, {
+              method: 'POST',
+              credentials: 'same-origin',
+              headers: {
+                'Content-Type': 'application/json',
+                'X-CSRFToken': csrfToken
+              },
+              body: JSON.stringify({ content })
+            });
+
+            if (res.ok) {
+              input.value = '';
+              await refreshSingleTransactionChat(txId, currentUserId);
+            }
+          });
+        });
+
+        if (data.transactions && data.transactions.length > 0) {
+          startDashboardPolling(data.transactions, currentUserId);
+        }
+
+      } catch (err) {
+        container.innerHTML = '<div class="card" style="text-align: center; color: var(--error);">거래 내역을 로드하는 데 실패했습니다.</div>';
+      }
+    }
+
+    async function refreshSingleTransactionChat(txId, currentUserId) {
+      const res = await fetch(`/api/transactions/${txId}/messages`, { credentials: 'same-origin' });
+      const data = await res.json().catch(() => ({ messages: [] }));
+      const chatBox = document.getElementById(`dashboard-chat-${txId}`);
+      if (chatBox) {
+        const isAtBottom = chatBox.scrollHeight - chatBox.clientHeight <= chatBox.scrollTop + 15;
+
+        chatBox.innerHTML = (data.messages || []).length
+          ? data.messages.map(msg => {
+              const isMine = msg.sender_id === currentUserId;
+              const bubbleClass = isMine ? 'chat-bubble mine' : 'chat-bubble other';
+              const senderLabel = isMine ? '나' : '상대방';
+              const timeStr = msg.created_at ? new Date(msg.created_at).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }) : '';
+
+              return `
+                <div class="${bubbleClass}">
+                  <div class="chat-meta">
+                    <span>${senderLabel}</span>
+                    <span>${timeStr}</span>
+                  </div>
+                  <div class="chat-text">${msg.content}</div>
+                </div>
+              `;
+            }).join('')
+          : '<p style="padding: 1rem; color: var(--text-secondary); margin: 0;">아직 주고받은 메시지가 없습니다.</p>';
+
+        if (isAtBottom) {
+          chatBox.scrollTop = chatBox.scrollHeight;
+        }
+      }
+    }
+
+    let dashboardInterval = null;
+    function startDashboardPolling(txList, currentUserId) {
+      if (dashboardInterval) clearInterval(dashboardInterval);
+      dashboardInterval = setInterval(() => {
+        txList.forEach(tx => {
+          refreshSingleTransactionChat(tx.id, currentUserId);
+        });
+      }, 3000);
+    }
+
+    document.addEventListener('DOMContentLoaded', loadDashboard);
   </script>
 </body>
 </html>

@@ -1,0 +1,245 @@
+<!doctype html>
+<html lang="ko">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>관리자 대시보드 - TinyMarket</title>
+  <link rel="stylesheet" href="/static/style.css">
+  <script src="/static/app.js" defer></script>
+</head>
+<body>
+  <!-- Global Navigation Header -->
+  <header id="global-header"></header>
+
+  <div class="dashboard-user-welcome" style="background: radial-gradient(circle at 10% 20%, rgba(139, 92, 246, 0.15) 0%, rgba(239, 68, 68, 0.05) 100%);">
+    <div>
+      <h2 style="margin: 0; font-size: 1.5rem; color: #a78bfa;">🛡️ 플랫폼 관리자 대시보드</h2>
+      <p style="margin: 0.25rem 0 0; color: var(--text-secondary);">악성 유저 차단, 부적절한 상품 삭제, 신고 조치를 총괄 제어합니다.</p>
+    </div>
+  </div>
+
+  <div id="admin-permission-error" class="card" style="display:none; color: var(--error); text-align: center; padding: 3rem;">
+    <h3>⛔ 접근 권한 오류 (403 Forbidden)</h3>
+    <p>관리자 계정만 접근할 수 있는 페이지입니다.</p>
+    <a href="/" class="btn-nav-primary" style="display:inline-block; margin-top: 1rem; text-decoration: none;">홈으로 돌아가기</a>
+  </div>
+
+  <div id="admin-main-content">
+    <!-- Tab Navigation -->
+    <div class="tab-header-nav">
+      <button class="tab-btn active" data-tab="tab-admin-reports" type="button">🚨 접수된 신고 목록</button>
+      <button class="tab-btn" data-tab="tab-admin-items" type="button">📦 상품 제어 및 차단</button>
+      <button class="tab-btn" data-tab="tab-admin-users" type="button">👤 유저 계정 제어</button>
+    </div>
+
+    <!-- Tab 1: Reports -->
+    <div id="tab-admin-reports" class="tab-pane active">
+      <div class="card">
+        <h3 style="margin-top:0;">신고 내역 리스트</h3>
+        <div id="reports-list-container">
+          <p>신고 내역을 불러오는 중...</p>
+        </div>
+      </div>
+    </div>
+
+    <!-- Tab 2: Item Control -->
+    <div id="tab-admin-items" class="tab-pane">
+      <div class="card" style="max-width: 600px;">
+        <h3 style="margin-top:0;">📦 악성/부적절 상품 상태 변경</h3>
+        <form id="admin-item-status-form">
+          <div style="margin-bottom: 1rem;">
+            <label style="display:block; margin-bottom: 0.4rem; font-weight: 500;">상품 ID (숫자)</label>
+            <input type="number" id="admin-item-id" placeholder="예: 3" required>
+          </div>
+          <div style="margin-bottom: 1.5rem;">
+            <label style="display:block; margin-bottom: 0.4rem; font-weight: 500;">적용할 상태</label>
+            <select id="admin-item-status-select" class="status-select-dropdown" style="width: 100%;">
+              <option value="blocked">⛔ 차단 (Blocked)</option>
+              <option value="deleted">🗑️ 삭제 (Deleted)</option>
+              <option value="available">✅ 정상 판매중 (Available)</option>
+            </select>
+          </div>
+          <button type="submit">상태 변경 적용</button>
+        </form>
+      </div>
+    </div>
+
+    <!-- Tab 3: User Control -->
+    <div id="tab-admin-users" class="tab-pane">
+      <div class="card" style="max-width: 600px;">
+        <h3 style="margin-top:0;">👤 악성 유저 계정 제어</h3>
+        <form id="admin-user-status-form">
+          <div style="margin-bottom: 1rem;">
+            <label style="display:block; margin-bottom: 0.4rem; font-weight: 500;">유저 ID (숫자)</label>
+            <input type="number" id="admin-user-id" placeholder="예: 2" required>
+          </div>
+          <div style="margin-bottom: 1.5rem;">
+            <label style="display:block; margin-bottom: 0.4rem; font-weight: 500;">계정 활성 여부</label>
+            <select id="admin-user-active-select" class="status-select-dropdown" style="width: 100%;">
+              <option value="false">🚫 계정 비활성화 / 차단 (Deactivate)</option>
+              <option value="true">✅ 계정 정상 활성화 (Activate)</option>
+            </select>
+          </div>
+          <button type="submit">유저 상태 변경 적용</button>
+        </form>
+      </div>
+    </div>
+  </div>
+
+  <script>
+    // Tab Switcher Logic
+    document.querySelectorAll('.tab-btn').forEach(btn => {
+      btn.addEventListener('click', () => {
+        document.querySelectorAll('.tab-btn').forEach(b => b.classList.remove('active'));
+        document.querySelectorAll('.tab-pane').forEach(p => p.classList.remove('active'));
+        
+        btn.classList.add('active');
+        const targetTab = btn.getAttribute('data-tab');
+        const targetPane = document.getElementById(targetTab);
+        if (targetPane) targetPane.classList.add('active');
+      });
+    });
+
+    async function initAdminPage() {
+      const authRes = await fetch('/api/auth/status', { credentials: 'same-origin' });
+      const authData = await authRes.json().catch(() => ({}));
+
+      if (!authData.authenticated || authData.user?.role !== 'admin') {
+        document.getElementById('admin-main-content').style.display = 'none';
+        document.getElementById('admin-permission-error').style.display = 'block';
+        return;
+      }
+
+      await loadReports();
+    }
+
+    async function loadReports() {
+      const container = document.getElementById('reports-list-container');
+      try {
+        const res = await fetch('/api/admin/reports', { credentials: 'same-origin' });
+        const data = await res.json().catch(() => ({ reports: [] }));
+
+        if (!data.reports || data.reports.length === 0) {
+          container.innerHTML = '<p style="color: var(--text-secondary); margin:0;">접수된 신고 내역이 없습니다.</p>';
+          return;
+        }
+
+        container.innerHTML = `
+          <table class="admin-table">
+            <thead>
+              <tr>
+                <th>신고 ID</th>
+                <th>신고자 ID</th>
+                <th>타깃</th>
+                <th>사유</th>
+                <th>상세 내용</th>
+                <th>조치</th>
+              </tr>
+            </thead>
+            <tbody>
+              ${data.reports.map(r => `
+                <tr>
+                  <td>#${r.id}</td>
+                  <td>User #${r.reporter_id || '익명'}</td>
+                  <td><strong>${r.target_type}</strong> #${r.target_id}</td>
+                  <td>${r.reason || '사유 없음'}</td>
+                  <td>${r.details || '-'}</td>
+                  <td>
+                    <button class="btn-report handle-report-btn" data-report-id="${r.id}" style="padding: 0.3rem 0.6rem; font-size: 0.8rem;">조치 완료</button>
+                  </td>
+                </tr>
+              `).join('')}
+            </tbody>
+          </table>
+        `;
+
+        container.querySelectorAll('.handle-report-btn').forEach(btn => {
+          btn.addEventListener('click', async () => {
+            const reportId = btn.getAttribute('data-report-id');
+            const csrfToken = await getCsrfToken();
+            const actionRes = await fetch(`/api/admin/reports/${reportId}/action`, {
+              method: 'POST',
+              credentials: 'same-origin',
+              headers: {
+                'Content-Type': 'application/json',
+                'X-CSRFToken': csrfToken
+              },
+              body: JSON.stringify({ action: 'resolved' })
+            });
+
+            if (actionRes.ok) {
+              alert(`신고 #${reportId} 조치가 처리되었습니다.`);
+              await loadReports();
+            } else {
+              alert('조치 처리에 실패했습니다.');
+            }
+          });
+        });
+
+      } catch (err) {
+        container.innerHTML = '<p style="color: var(--error);">신고 목록을 로드하는 중 오류가 발생했습니다.</p>';
+      }
+    }
+
+    // Admin Item Status Form Submit
+    document.getElementById('admin-item-status-form').addEventListener('submit', async (e) => {
+      e.preventDefault();
+      const itemId = document.getElementById('admin-item-id').value;
+      const status = document.getElementById('admin-item-status-select').value;
+      const csrfToken = await getCsrfToken();
+
+      try {
+        const res = await fetch(`/api/admin/products/${itemId}/status`, {
+          method: 'PATCH',
+          credentials: 'same-origin',
+          headers: {
+            'Content-Type': 'application/json',
+            'X-CSRFToken': csrfToken
+          },
+          body: JSON.stringify({ status })
+        });
+
+        if (res.ok) {
+          alert(`상품 #${itemId}의 상태가 '${status}'(으)로 변경되었습니다.`);
+        } else {
+          const errData = await res.json().catch(() => ({}));
+          alert(errData.message || '상태 변경 실패');
+        }
+      } catch (err) {
+        alert('서버 통신 오류가 발생했습니다.');
+      }
+    });
+
+    // Admin User Status Form Submit
+    document.getElementById('admin-user-status-form').addEventListener('submit', async (e) => {
+      e.preventDefault();
+      const userId = document.getElementById('admin-user-id').value;
+      const isActive = document.getElementById('admin-user-active-select').value === 'true';
+      const csrfToken = await getCsrfToken();
+
+      try {
+        const res = await fetch(`/api/admin/users/${userId}/status`, {
+          method: 'PATCH',
+          credentials: 'same-origin',
+          headers: {
+            'Content-Type': 'application/json',
+            'X-CSRFToken': csrfToken
+          },
+          body: JSON.stringify({ is_active: isActive })
+        });
+
+        if (res.ok) {
+          alert(`유저 #${userId}의 계정 상태가 '${isActive ? '활성화' : '비활성화'}'(으)로 변경되었습니다.`);
+        } else {
+          const errData = await res.json().catch(() => ({}));
+          alert(errData.message || '유저 상태 변경 실패');
+        }
+      } catch (err) {
+        alert('서버 통신 오류가 발생했습니다.');
+      }
+    });
+
+    document.addEventListener('DOMContentLoaded', initAdminPage);
+  </script>
+</body>
+</html>

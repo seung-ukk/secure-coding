@@ -89,4 +89,8 @@ def create_app(config_object: str = 'app.config.Config'):
     def dashboard_page():
         return app.send_static_file('dashboard.html')
 
+    @app.route('/admin')
+    def admin_page():
+        return app.send_static_file('admin.html')
+
     return app
