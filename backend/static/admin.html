@@ -168,8 +168,14 @@
             });
 
             if (actionRes.ok) {
-              alert(`신고 #${reportId} 조치가 처리되었습니다.`);
-              await loadReports();
+              btn.textContent = '✅ 조치완료됨';
+              btn.disabled = true;
+              btn.style.opacity = '0.6';
+              const msgBox = document.getElementById('admin-action-msg') || createMsgBox();
+              msgBox.style.display = 'block';
+              msgBox.className = 'message success';
+              msgBox.textContent = `신고 #${reportId} 조치가 성공적으로 처리되었습니다.`;
+              setTimeout(async () => { await loadReports(); }, 1500);
             } else {
               alert('조치 처리에 실패했습니다.');
             }
@@ -179,6 +185,17 @@
       } catch (err) {
         container.innerHTML = '<p style="color: var(--error);">신고 목록을 로드하는 중 오류가 발생했습니다.</p>';
       }
+    }
+
+    function createMsgBox() {
+      let box = document.getElementById('admin-action-msg');
+      if (!box) {
+        box = document.createElement('div');
+        box.id = 'admin-action-msg';
+        box.style.marginBottom = '1rem';
+        document.getElementById('admin-main-content').prepend(box);
+      }
+      return box;
     }
 
     // Admin Item Status Form Submit
