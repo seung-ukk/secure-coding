@@ -128,12 +128,12 @@
         galleryHtml = `
           <div class="gallery-container">
             <div class="gallery-main-view">
-              <img id="main-gallery-img" src="${images[0]}" class="gallery-main-img" alt="${data.title}">
+              <img id="main-gallery-img" src="${escapeAttr(images[0])}" class="gallery-main-img" alt="${escapeAttr(data.title)}">
             </div>
             ${images.length > 1 ? `
               <div class="gallery-thumbs-list">
                 ${images.map((imgUrl, idx) => `
-                  <img src="${imgUrl}" class="gallery-thumb-item ${idx === 0 ? 'active' : ''}" data-img-url="${imgUrl}" alt="thumbnail">
+                  <img src="${escapeAttr(imgUrl)}" class="gallery-thumb-item ${idx === 0 ? 'active' : ''}" data-img-url="${escapeAttr(imgUrl)}" alt="thumbnail">
                 `).join('')}
               </div>
             ` : ''}
@@ -153,19 +153,19 @@
       const infoHtml = `
         <div class="info-panel">
           <div class="info-header-row">
-            <h1 class="info-title">${data.title}</h1>
+            <h1 class="info-title">${escapeHtml(data.title)}</h1>
             <div id="status-badge-container">${getStatusBadge(data.status || 'available')}</div>
           </div>
           <div class="info-price">${formatPrice(data.price)}</div>
           
           <div class="seller-badge-info" style="justify-content: space-between;">
-            <span>👤 판매자: <strong>${itemOwnerUsername}</strong></span>
+            <span>👤 판매자: <strong>${escapeHtml(itemOwnerUsername)}</strong></span>
             <button id="open-report-btn" class="btn-report" type="button" style="padding: 0.3rem 0.75rem; font-size: 0.85rem;">🚨 신고</button>
           </div>
 
           <div style="background: rgba(255,255,255,0.03); border: 1px solid var(--border-color); border-radius: 8px; padding: 1rem; margin: 0.5rem 0;">
             <strong style="display:block; margin-bottom: 0.5rem; color: var(--text-secondary);">상품 설명</strong>
-            <p style="white-space: pre-wrap; margin: 0;">${data.description || '설명이 작성되지 않았습니다.'}</p>
+            <p style="white-space: pre-wrap; margin: 0;">${escapeHtml(data.description || '설명이 작성되지 않았습니다.')}</p>
           </div>
 
           ${isSeller ? `
@@ -449,10 +449,10 @@
             return `
               <div class="${bubbleClass}">
                 <div class="chat-meta">
-                  <span>${senderLabel}</span>
+                  <span>${escapeHtml(senderLabel)}</span>
                   <span>${timeStr}</span>
                 </div>
-                <div class="chat-text">${msg.content}</div>
+                <div class="chat-text">${escapeHtml(msg.content)}</div>
               </div>
             `;
           }).join('')

@@ -5,7 +5,72 @@ from app.models import Item, ItemImage, User
 from flask_login import login_required, current_user
 from werkzeug.utils import secure_filename
 import os, uuid
-from app.utils.security import verify_file_type
+from app.utils.security import (
+    MAX_IMAGE_FILE_SIZE,
+    detect_image_type,
+    get_file_size,
+    is_allowed_image_extension,
+    is_allowed_image_mime_type,
+)
+from app.utils.validators import (
+    validate_item_description,
+    validate_item_price,
+    validate_item_title,
+)
+from app.models import Transaction
+
+
+def _serialize_item(it: Item):
+    return {
+        'id': it.id,
+        'title': it.title,
+        'description': it.description,
+        'price': float(it.price),
+        'status': it.status,
+    }
+
+
+def _validate_and_save_images(files, item_id: int):
+    if not files:
+        return []
+
+    max_image_count = current_app.config.get('MAX_ITEM_IMAGE_COUNT', 5)
+    if len(files) > max_image_count:
+        raise ValueError(f'no more than {max_image_count} images are allowed')
+
+    upload_folder = current_app.config.get('UPLOAD_FOLDER') or '/tmp/secure_media'
+    os.makedirs(upload_folder, exist_ok=True)
+    max_file_size = current_app.config.get('MAX_ITEM_IMAGE_SIZE', MAX_IMAGE_FILE_SIZE)
+
+    saved = []
+    for file_storage in files:
+        if not file_storage or not file_storage.filename:
+            raise ValueError('image filename is required')
+
+        filename = secure_filename(file_storage.filename)
+        if not filename:
+            raise ValueError('invalid image filename')
+        if not is_allowed_image_extension(filename):
+            raise ValueError('only jpg, jpeg, and png images are allowed')
+        if not is_allowed_image_mime_type(file_storage.mimetype):
+            raise ValueError('invalid image mime type')
+        if get_file_size(file_storage.stream) > max_file_size:
+            raise ValueError('image file exceeds size limit')
+
+        detected_type = detect_image_type(file_storage.stream)
+        if detected_type not in ('jpeg', 'png'):
+            raise ValueError('uploaded file is not a valid image')
+
+        extension = '.jpg' if detected_type == 'jpeg' else '.png'
+        dest_name = f'{uuid.uuid4()}{extension}'
+        dest_path = os.path.join(upload_folder, dest_name)
+        file_storage.stream.seek(0)
+        file_storage.save(dest_path)
+        img = ItemImage(item_id=item_id, file_path=dest_path)
+        db.session.add(img)
+        saved.append(dest_name)
+
+    return saved
 
 
 @items_bp.route('', methods=['GET'])
@@ -26,39 +91,32 @@ def list_items():
 @items_bp.route('', methods=['POST'])
 @login_required
 def create_item():
-    title = request.form.get('title')
-    description = request.form.get('description')
-    price = request.form.get('price')
-    category_id = request.form.get('category_id')
-    if not title or not price:
-        return jsonify({'error': 'validation', 'message': 'title and price required'}), 400
-    try:
-        price_val = float(price)
-    except Exception:
-        return jsonify({'error': 'validation', 'message': 'invalid price'}), 400
+    title_ok, title = validate_item_title(request.form.get('title'))
+    if not title_ok:
+        return jsonify({'error': 'validation', 'message': title}), 400
+
+    description_ok, description = validate_item_description(request.form.get('description'))
+    if not description_ok:
+        return jsonify({'error': 'validation', 'message': description}), 400
+
+    price_ok, price_val, price_message = validate_item_price(request.form.get('price'))
+    if not price_ok:
+        return jsonify({'error': 'validation', 'message': price_message}), 400
+
     item = Item(owner_id=current_user.id, title=title, description=description, price=price_val)
     db.session.add(item)
     db.session.commit()
 
     files = request.files.getlist('images[]')
-    saved = []
-    upload_folder = current_app.config.get('UPLOAD_FOLDER') or '/tmp'
-    for f in files:
-        if not f:
-            continue
-        filename = secure_filename(f.filename)
-        ext = os.path.splitext(filename)[1].lower()
-        uid = str(uuid.uuid4())
-        dest_name = uid + ext
-        dest_path = os.path.join(upload_folder, dest_name)
-        # verify image
-        if not verify_file_type(f.stream):
-            continue
-        f.save(dest_path)
-        img = ItemImage(item_id=item.id, file_path=dest_path)
-        db.session.add(img)
-        saved.append(dest_name)
-    db.session.commit()
+    try:
+        saved = _validate_and_save_images(files, item.id)
+        db.session.commit()
+    except ValueError as exc:
+        db.session.rollback()
+        db.session.delete(item)
+        db.session.commit()
+        return jsonify({'error': 'validation', 'message': str(exc)}), 400
+
     return jsonify({'id': item.id, 'title': item.title, 'price': float(item.price), 'images': saved}), 201
 
 
@@ -71,7 +129,9 @@ def get_item(item_id):
     images = ItemImage.query.filter_by(item_id=it.id).all()
     imgs = [f"/api/media/{os.path.basename(img.file_path)}" for img in images]
     owner = User.query.get(it.owner_id)
-    return jsonify({'id': it.id, 'title': it.title, 'description': it.description, 'price': float(it.price), 'images': imgs, 'owner': {'id': owner.id, 'username': owner.username}, 'status': it.status})
+    payload = _serialize_item(it)
+    payload.update({'images': imgs, 'owner': {'id': owner.id, 'username': owner.username}})
+    return jsonify(payload)
 
 
 @items_bp.route('/mine', methods=['GET'])
@@ -90,9 +150,17 @@ def request_purchase(item_id):
     it = Item.query.get_or_404(item_id)
     if it.owner_id == current_user.id:
         return jsonify({'error': 'validation', 'message': 'cannot request own item'}), 400
+    if not current_user.is_active:
+        return jsonify({'error': 'forbidden', 'message': 'inactive users cannot request purchases'}), 403
+    if it.status != 'available':
+        return jsonify({'error': 'validation', 'message': 'item is not available for purchase'}), 400
 
-    from app.models import Transaction
-    existing = Transaction.query.filter_by(item_id=it.id, buyer_id=current_user.id, seller_id=it.owner_id).order_by(Transaction.created_at.desc()).first()
+    existing = Transaction.query.filter(
+        Transaction.item_id == it.id,
+        Transaction.buyer_id == current_user.id,
+        Transaction.seller_id == it.owner_id,
+        Transaction.status.in_(['requested', 'accepted']),
+    ).order_by(Transaction.created_at.desc()).first()
     if existing:
         return jsonify({'transaction_id': existing.id, 'status': existing.status, 'message': 'existing request'}), 200
 
@@ -120,37 +188,37 @@ def update_item(item_id):
     status = data.get('status')
 
     if title is not None:
-        title = title.strip()
-        if not title:
-            return jsonify({'error': 'validation', 'message': 'Title cannot be empty'}), 400
+        title_ok, title = validate_item_title(title)
+        if not title_ok:
+            return jsonify({'error': 'validation', 'message': title}), 400
         it.title = title
 
     if description is not None:
-        it.description = description.strip()
+        description_ok, description = validate_item_description(description)
+        if not description_ok:
+            return jsonify({'error': 'validation', 'message': description}), 400
+        it.description = description
 
     if price is not None:
-        try:
-            price_val = float(price)
-            if price_val < 0:
-                return jsonify({'error': 'validation', 'message': 'Price cannot be negative'}), 400
-            it.price = price_val
-        except Exception:
-            return jsonify({'error': 'validation', 'message': 'Invalid price format'}), 400
+        price_ok, price_val, price_message = validate_item_price(price)
+        if not price_ok:
+            return jsonify({'error': 'validation', 'message': price_message}), 400
+        it.price = price_val
 
     if status is not None:
         status = status.strip().lower()
-        if status not in ('available', 'reserved', 'sold'):
-            return jsonify({'error': 'validation', 'message': 'Invalid status'}), 400
+        if status != 'available':
+            return jsonify({'error': 'validation', 'message': 'item status transitions must go through transaction flow'}), 400
+        active_transactions = Transaction.query.filter(
+            Transaction.item_id == it.id,
+            Transaction.status.in_(['requested', 'accepted']),
+        ).count()
+        if active_transactions:
+            return jsonify({'error': 'validation', 'message': 'cannot mark item available while active transactions exist'}), 400
         it.status = status
 
     db.session.commit()
-    return jsonify({
-        'id': it.id,
-        'title': it.title,
-        'description': it.description,
-        'price': float(it.price),
-        'status': it.status
-    }), 200
+    return jsonify(_serialize_item(it)), 200
 
 
 @items_bp.route('/<int:item_id>', methods=['DELETE'])

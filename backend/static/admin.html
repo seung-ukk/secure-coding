@@ -142,8 +142,8 @@
                   <td>#${r.id}</td>
                   <td>User #${r.reporter_id || '익명'}</td>
                   <td><strong>${r.target_type}</strong> #${r.target_id}</td>
-                  <td>${r.reason || '사유 없음'}</td>
-                  <td>${r.details || '-'}</td>
+                  <td>${escapeHtml(r.reason || '사유 없음')}</td>
+                  <td>${escapeHtml(r.details || '-')}</td>
                   <td>
                     <button class="btn-report handle-report-btn" data-report-id="${r.id}" style="padding: 0.3rem 0.6rem; font-size: 0.8rem;">조치 완료</button>
                   </td>

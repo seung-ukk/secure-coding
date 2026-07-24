@@ -14,6 +14,12 @@ class User(UserMixin, db.Model):
     is_active = db.Column(db.Boolean, default=True)
     role = db.Column(db.String(20), default='user')
     created_at = db.Column(db.DateTime, default=datetime.utcnow)
+    updated_at = db.Column(db.DateTime, default=datetime.utcnow, onupdate=datetime.utcnow)
+    failed_login_count = db.Column(db.Integer, default=0, nullable=False)
+    locked_until = db.Column(db.DateTime)
+    session_version = db.Column(db.Integer, default=0, nullable=False)
+    active_session_token = db.Column(db.String(64))
+    balance = db.Column(db.Numeric(12, 2), default=0, nullable=False)
 
 class Item(db.Model):
     __tablename__ = 'items'
@@ -40,6 +46,7 @@ class Transaction(db.Model):
     seller_id = db.Column(db.Integer, db.ForeignKey('users.id'), nullable=False)
     status = db.Column(db.String(20), default='requested')
     created_at = db.Column(db.DateTime, default=datetime.utcnow)
+    updated_at = db.Column(db.DateTime, default=datetime.utcnow, onupdate=datetime.utcnow)
 
 class Message(db.Model):
     __tablename__ = 'messages'
@@ -57,7 +64,9 @@ class Report(db.Model):
     target_id = db.Column(db.Integer)
     reason = db.Column(db.String(100))
     details = db.Column(db.Text)
+    status = db.Column(db.String(20), default='submitted', nullable=False)
     created_at = db.Column(db.DateTime, default=datetime.utcnow)
+    reviewed_at = db.Column(db.DateTime)
 
 class AuditLog(db.Model):
     __tablename__ = 'audit_logs'
@@ -70,6 +79,14 @@ class AuditLog(db.Model):
     created_at = db.Column(db.DateTime, default=datetime.utcnow)
 
 
+class AppSetting(db.Model):
+    __tablename__ = 'app_settings'
+    id = db.Column(db.Integer, primary_key=True)
+    key = db.Column(db.String(100), unique=True, nullable=False)
+    value = db.Column(db.String(255), nullable=False)
+    updated_at = db.Column(db.DateTime, default=datetime.utcnow, onupdate=datetime.utcnow, nullable=False)
+
+
 class GlobalMessage(db.Model):
     __tablename__ = 'global_messages'
     id = db.Column(db.Integer, primary_key=True)
@@ -77,4 +94,3 @@ class GlobalMessage(db.Model):
     content = db.Column(db.String(1000), nullable=False)
     status = db.Column(db.String(20), default='active', nullable=False)
     created_at = db.Column(db.DateTime, default=datetime.utcnow, nullable=False)
-

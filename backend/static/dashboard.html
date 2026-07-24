@@ -78,12 +78,12 @@
       }
 
       currentUserId = authData.user?.id;
-      document.getElementById('welcome-message').innerHTML = `안녕하세요, <strong>${authData.user?.username}</strong>님! 반가워요 ✨`;
+      document.getElementById('welcome-message').innerHTML = `안녕하세요, <strong>${escapeHtml(authData.user?.username)}</strong>님! 반가워요 ✨`;
 
       // Fill Profile Tab
       document.getElementById('profile-info-content').innerHTML = `
         <div style="display: flex; flex-direction: column; gap: 0.75rem; font-size: 1rem;">
-          <div>👤 <strong>사용자명:</strong> ${authData.user?.username}</div>
+          <div>👤 <strong>사용자명:</strong> ${escapeHtml(authData.user?.username)}</div>
           <div>🆔 <strong>회원 ID:</strong> #${authData.user?.id}</div>
           <div>🛡️ <strong>계정 상태:</strong> <span class="status-badge available">정상 (Active)</span></div>
         </div>
@@ -112,7 +112,7 @@
             <div>
               <div style="display: flex; justify-content: space-between; align-items: flex-start; margin-bottom: 0.5rem;">
                 <h3 style="margin: 0; font-size: 1.15rem;">
-                  <a href="/items/${item.id}" style="color: var(--text-primary); text-decoration: none;">${item.title}</a>
+                  <a href="/items/${item.id}" style="color: var(--text-primary); text-decoration: none;">${escapeHtml(item.title)}</a>
                 </h3>
                 <div id="dashboard-item-badge-${item.id}">${getStatusBadge(item.status || 'available')}</div>
               </div>
@@ -189,10 +189,10 @@
                 return `
                   <div class="${bubbleClass}">
                     <div class="chat-meta">
-                      <span>${senderLabel}</span>
+                      <span>${escapeHtml(senderLabel)}</span>
                       <span>${timeStr}</span>
                     </div>
-                    <div class="chat-text">${msg.content}</div>
+                    <div class="chat-text">${escapeHtml(msg.content)}</div>
                   </div>
                 `;
               }).join('')
@@ -290,10 +290,10 @@
               return `
                 <div class="${bubbleClass}">
                   <div class="chat-meta">
-                    <span>${senderLabel}</span>
+                  <span>${escapeHtml(senderLabel)}</span>
                     <span>${timeStr}</span>
                   </div>
-                  <div class="chat-text">${msg.content}</div>
+                  <div class="chat-text">${escapeHtml(msg.content)}</div>
                 </div>
               `;
             }).join('')

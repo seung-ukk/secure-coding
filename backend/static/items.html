@@ -88,7 +88,7 @@
           container.innerHTML = `
             <div class="card" style="grid-column: 1 / -1; text-align: center; padding: 3rem 1.5rem;">
               <p style="font-size: 1.1rem; color: var(--text-secondary); margin-bottom: 1rem;">
-                ${currentSearchQuery ? `'${currentSearchQuery}' 검색 결과가 없습니다.` : '등록된 상품이 없습니다.'}
+                ${currentSearchQuery ? `'${escapeHtml(currentSearchQuery)}' 검색 결과가 없습니다.` : '등록된 상품이 없습니다.'}
               </p>
               <button id="empty-create-btn" type="button">첫 상품 등록하기</button>
             </div>
@@ -107,7 +107,7 @@
                 </div>
               </a>
               <h3 style="margin: 0.5rem 0 0.25rem; font-size: 1.15rem;">
-                <a href="/items/${item.id}" style="color: var(--text-primary); text-decoration: none;">${item.title}</a>
+                <a href="/items/${item.id}" style="color: var(--text-primary); text-decoration: none;">${escapeHtml(item.title)}</a>
               </h3>
             </div>
             <div style="margin-top: 1rem; display: flex; justify-content: space-between; align-items: center;">

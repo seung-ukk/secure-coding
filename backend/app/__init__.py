@@ -1,13 +1,14 @@
 import os
 from pathlib import Path
-from flask import Flask, send_from_directory
+from flask import Flask, send_from_directory, jsonify, session, request
 from flask_sqlalchemy import SQLAlchemy
-from flask_login import LoginManager, current_user
+from flask_login import LoginManager, current_user, logout_user
 from flask_wtf import CSRFProtect
 from flask_migrate import Migrate
 from dotenv import load_dotenv
 
-load_dotenv()
+BASE_DIR = Path(__file__).resolve().parent.parent
+load_dotenv(BASE_DIR / '.env')
 
 db = SQLAlchemy()
 login_manager = LoginManager()
@@ -18,6 +19,7 @@ migrate = Migrate()
 def create_app(config_object: str = 'app.config.Config'):
     app = Flask(__name__, static_folder='../static', template_folder='../templates')
     app.config.from_object(config_object)
+    auth_paths = {'/api/auth/login', '/api/auth/register', '/api/auth/csrf-token'}
 
     db.init_app(app)
     login_manager.init_app(app)
@@ -49,6 +51,82 @@ def create_app(config_object: str = 'app.config.Config'):
     app.register_blueprint(users_bp, url_prefix='/api')
     app.register_blueprint(chat_bp, url_prefix='/api/chat')
 
+    login_manager.login_view = None
+
+    @app.before_request
+    def enforce_active_session():
+        if not current_user.is_authenticated:
+            return None
+        try:
+            from app.models import User
+
+            result = db.session.execute(
+                db.select(
+                    User.id,
+                    User.is_active,
+                    User.session_version,
+                    User.active_session_token,
+                ).where(User.id == current_user.id)
+            ).first()
+        except Exception:
+            db.session.rollback()
+            session.clear()
+            logout_user()
+            if request.path.startswith('/api/'):
+                return jsonify({'error': 'unauthorized', 'message': 'session expired'}), 401
+            return None
+        if not result:
+            session.clear()
+            logout_user()
+            if request.path.startswith('/api/'):
+                return jsonify({'error': 'unauthorized', 'message': 'session expired'}), 401
+            return None
+        user_id, is_active, session_version_db, active_session_token = result
+        if not is_active:
+            session.clear()
+            logout_user()
+            if request.path in auth_paths:
+                return None
+            if request.path.startswith('/api/'):
+                return jsonify({'error': 'forbidden', 'message': 'account is inactive'}), 403
+            return None
+        session_version = session.get('session_version')
+        if session_version is not None and session_version != session_version_db:
+            session.clear()
+            logout_user()
+            if request.path in auth_paths:
+                return None
+            if request.path.startswith('/api/'):
+                return jsonify({'error': 'unauthorized', 'message': 'session expired'}), 401
+            return None
+        session_token = session.get('session_token')
+        if session_token is not None and session_token != active_session_token:
+            session.clear()
+            logout_user()
+            if request.path in auth_paths:
+                return None
+            if request.path.startswith('/api/'):
+                return jsonify({'error': 'unauthorized', 'message': 'session expired'}), 401
+            return None
+        return None
+
+    @login_manager.unauthorized_handler
+    def unauthorized():
+        return jsonify({'error': 'unauthorized', 'message': 'authentication required'}), 401
+
+    @app.errorhandler(403)
+    def forbidden(_error):
+        return jsonify({'error': 'forbidden', 'message': 'permission denied'}), 403
+
+    @app.errorhandler(404)
+    def not_found(_error):
+        return jsonify({'error': 'not_found', 'message': 'resource not found'}), 404
+
+    @app.errorhandler(500)
+    def server_error(_error):
+        db.session.rollback()
+        return jsonify({'error': 'server_error', 'message': 'internal server error'}), 500
+
     # simple health route
     @app.route('/health')
     def health():
@@ -64,10 +142,21 @@ def create_app(config_object: str = 'app.config.Config'):
     def index():
         html_path = Path(app.static_folder) / 'index.html'
         html = html_path.read_text(encoding='utf-8')
+        legacy_catalog_label = '\ufffd\ufffd\u01f0 \ufffd\ufffd\u0238'
         user_area = '아직 로그인하지 않았습니다.'
         if current_user.is_authenticated:
             user_area = f'로그인됨: <strong>{current_user.username}</strong>'
-        return html.replace('{{user_area}}', user_area)
+        if '{{user_area}}' in html:
+            return html.replace('{{user_area}}', user_area)
+        user_panel = (
+            '<section class="card" style="margin-bottom: 1.5rem;">'
+            f'<p>{user_area}</p>'
+            '<p>?곹뭹 議고쉶</p>'
+            f'<p>{legacy_catalog_label}</p>'
+            '<p>??? ???</p>'
+            '</section>'
+        )
+        return html.replace('<section class="hero-section">', f'{user_panel}<section class="hero-section">', 1)
 
     @app.route('/login')
     def login_page():

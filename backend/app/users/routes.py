@@ -42,6 +42,7 @@ def get_my_profile():
         'bio': current_user.bio,
         'is_active': current_user.is_active,
         'role': current_user.role,
+        'balance': float(current_user.balance),
         'created_at': current_user.created_at.isoformat()
     }), 200
 
@@ -100,6 +101,8 @@ def update_password():
         }), 400
         
     current_user.password_hash = hash_password(new_password)
+    current_user.session_version += 1
+    current_user.active_session_token = None
     db.session.commit()
     
     logout_user()
